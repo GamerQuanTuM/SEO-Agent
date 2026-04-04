@@ -28,7 +28,7 @@
 ### What It Does
 
 1. **Crawls** a target website to find broken pages, orphaned content, schema issues, and crawl budget waste
-2. **Calls real APIs** (Google PageSpeed Insights, Google Search Console, DataForSEO) to gather performance metrics, keyword rankings, and backlink profiles
+2. **Calls real APIs** (Google PageSpeed Insights, Google Search Console, and your choice of DataForSEO, Semrush, or Ahrefs) to gather performance metrics, keyword rankings, and backlink profiles
 3. **Sends all collected data** to three specialized Gemini-powered AI agents that analyze it independently
 4. **Synthesizes** all three agent reports into a single executive summary with a health score and priority action plan
 5. **Saves** the full report as a Markdown file
@@ -40,6 +40,7 @@
 | **LangGraph** over raw LangChain | Provides explicit graph topology (fan-out/fan-in), typed state management, and deterministic execution order |
 | **Fan-out → Fan-in** pattern | All 3 agents run on the same data simultaneously, then converge at the Supervisor — mirrors how a real SEO team works |
 | **Graceful degradation** | Every external API service is optional except Gemini. Missing credentials produce informative warnings, not crashes |
+| **Provider Agnostic** | The backlink API automatically detects your configured provider (DataForSEO, Semrush, or Ahrefs) and routes to the appropriate module |
 | **`uv`** as package manager | Faster than pip, deterministic lockfile (`uv.lock`), and first-class `pyproject.toml` support |
 | **Rich** for CLI output | Colored panels, tables, and Markdown rendering directly in the terminal |
 
@@ -49,7 +50,7 @@
 
 ### High-Level Pipeline
 
-```
+```text
 ┌─────────────┐     ┌──────────────────────────────────────────────────┐     ┌─────────────────┐
 │             │     │            LangGraph StateGraph                  │     │                 │
 │   CLI       │     │                                                  │     │  Output         │
@@ -79,7 +80,7 @@
 
 ### Data Flow — Step by Step
 
-```
+```text
 Step 1: main.py initializes the LLM (Gemini) and builds the LangGraph
             │
             ▼
@@ -88,7 +89,10 @@ Step 2: ingest_data node calls tools.py → get_all_seo_data()
             ├─── crawler.py    → Crawls site via HTTP (broken pages, schema, links)
             ├─── pagespeed.py  → Calls Google PageSpeed API (LCP, FID, CLS)
             ├─── search_console.py → Calls Google Search Console API (rankings, CTR)
-            └─── dataforseo.py → Calls DataForSEO API (backlinks, toxic links)
+            └─── (Auto-detect based on .env keys)
+                   ├── dataforseo.py → Calls DataForSEO API
+                   ├── semrush.py    → Calls Semrush Analytics API
+                   └── ahrefs.py     → Calls Ahrefs API v3
             │
             ▼
 Step 3: Raw data stored in AgentState["raw_data"] as dict with 3 keys:
@@ -118,7 +122,7 @@ Step 7: main.py displays all 4 reports in Rich panels, saves to .md file
 
 ## 3. Folder Structure
 
-```
+```text
 seo-agent/
 │
 ├── .env.example                          # Template with all env vars documented
@@ -126,9 +130,8 @@ seo-agent/
 ├── .gitignore                            # Git ignore rules
 ├── .python-version                       # Python version pin (3.11)
 ├── pyproject.toml                        # Project config + dependencies
-├── uv.lock                              # Deterministic dependency lockfile
-├── EZYDRAGAI.pdf                         # Original PRD document
-├── PROJECT.md                            # This file
+├── uv.lock                               # Deterministic dependency lockfile
+├── README.md                             # This file
 │
 ├── main.py                               # CLI entry point — argument parsing,
 │                                         # LLM init, graph execution, output display
@@ -148,12 +151,14 @@ seo-agent/
         │   ├── onpage.py                 # Agent 2: On-Page Content Strategist
         │   └── offpage.py                # Agent 3: Off-Page PR & Security Bot
         │
-        └── services/                     # One file per external API integration
+        └── services/                     # External API integrations
             ├── __init__.py
             ├── crawler.py                # Built-in HTTP site crawler
             ├── pagespeed.py              # Google PageSpeed Insights API client
             ├── search_console.py         # Google Search Console API client
-            └── dataforseo.py             # DataForSEO Backlinks API client
+            ├── dataforseo.py             # DataForSEO Backlinks API client
+            ├── semrush.py                # Semrush API client
+            └── ahrefs.py                 # Ahrefs API v3 client
 ```
 
 ---
@@ -162,7 +167,7 @@ seo-agent/
 
 ### Root Files
 
-#### `main.py` (297 lines)
+#### `main.py`
 **Role:** CLI entry point and output renderer.
 
 - Parses command-line arguments (`--url`, `--client`, `--competitors`, `--max-pages`)
@@ -175,17 +180,17 @@ seo-agent/
 - Renders all 4 reports (Technical, On-Page, Off-Page, Executive) in color-coded Rich panels
 - Saves the complete audit to a timestamped Markdown file
 
-#### `pyproject.toml` (20 lines)
+#### `pyproject.toml`
 **Role:** Project metadata and dependency declarations for `uv`.
 
-Declares Python ≥3.11 and all 11 production dependencies.
+Declares Python ≥3.11 and all production dependencies.
 
-#### `.env.example` (37 lines)
+#### `.env.example`
 **Role:** Template documenting every environment variable with setup instructions.
 
 ---
 
-### `src/seo_agents/state.py` (38 lines)
+### `src/seo_agents/state.py`
 **Role:** Defines the shared state schema that flows through the entire LangGraph.
 
 Contains a single `AgentState` class (a `TypedDict`) with 9 fields:
@@ -207,7 +212,7 @@ The `messages` field uses `Annotated[list, operator.add]` which is a LangGraph c
 
 ---
 
-### `src/seo_agents/prompts.py` (92 lines)
+### `src/seo_agents/prompts.py`
 **Role:** Contains the exact system prompts for all 4 LLM roles, adapted from the original PRD.
 
 | Prompt Constant | Target | Output Sections |
@@ -217,27 +222,23 @@ The `messages` field uses `Annotated[list, operator.add]` which is a LangGraph c
 | `OFFPAGE_AGENT_PROMPT` | Agent 3 (PR Bot) | Critical Link Alerts, Disavow Prep, Top 3 Outreach Targets, Outreach Emails, Velocity Report |
 | `SUPERVISOR_PROMPT` | Supervisor | Executive Summary (2 paragraphs), Priority Action Plan (top 10), Health Score (0-100) |
 
-The Supervisor prompt uses Python `.format()` placeholders (`{client_name}`, `{website_url}`) that get filled at runtime.
-
 ---
 
-### `src/seo_agents/tools.py` (152 lines)
+### `src/seo_agents/tools.py`
 **Role:** Service orchestrator — the bridge between the LangGraph and the external API services.
 
 Contains 4 public functions:
 
 | Function | Services It Calls | Returns |
 |----------|-------------------|---------|
-| `get_crawl_data(url, max_pages)` | `crawler.crawl_site()` + `pagespeed.get_core_web_vitals()` | Crawl results + Core Web Vitals merged into one dict |
-| `get_analytics_data(url)` | `search_console.get_search_analytics()` | Rankings, CTR, decay, cannibalization data |
-| `get_backlink_data(url, competitors)` | `dataforseo.get_backlink_profile()` + `dataforseo.get_competitor_backlink_gap()` | Backlink profile + competitor gap analysis |
-| `get_all_seo_data(url, max_pages, competitors)` | Calls all three above | Dict with keys `"crawl_data"`, `"analytics_data"`, `"backlink_data"` |
-
-Also contains `_extract_domain()` helper that strips a URL down to its bare domain (e.g., `"https://www.example.com/page"` → `"example.com"`).
+| `get_crawl_data()` | `crawler.crawl_site()` + `pagespeed.get_core_web_vitals()` | Crawl results + Core Web Vitals merged into one dict |
+| `get_analytics_data()` | `search_console.get_search_analytics()` | Rankings, CTR, decay, cannibalization data |
+| `get_backlink_data()` | Auto-detects DataForSEO / Semrush / Ahrefs based on `.env` | Backlink profile + competitor gap analysis |
+| `get_all_seo_data()` | Calls all three above | Dict with keys `"crawl_data"`, `"analytics_data"`, `"backlink_data"` |
 
 ---
 
-### `src/seo_agents/graph.py` (137 lines)
+### `src/seo_agents/graph.py`
 **Role:** Defines and compiles the LangGraph `StateGraph` — the heart of the multi-agent orchestration.
 
 Contains 3 functions:
@@ -272,90 +273,37 @@ All three agent files follow the **exact same pattern**:
 4. Call `llm.invoke(messages)` — sends to Gemini
 5. Return a dict with the report string and appended messages
 
-#### `technical.py` (52 lines) — Agent 1: Technical & DevOps Bot
+#### `technical.py` — Agent 1: Technical & DevOps Bot
 - **Reads:** `state["raw_data"]["crawl_data"]`
-- **System prompt:** `TECHNICAL_AGENT_PROMPT`
-- **Writes to:** `state["technical_report"]`
 - **Analysis focus:** Crawl budget waste, 404→301 redirects with code snippets, Core Web Vitals bottlenecks, JSON-LD schema errors
 
-#### `onpage.py` (56 lines) — Agent 2: On-Page Content Strategist
+#### `onpage.py` — Agent 2: On-Page Content Strategist
 - **Reads:** `state["raw_data"]["analytics_data"]`
-- **System prompt:** `ONPAGE_AGENT_PROMPT`
-- **Writes to:** `state["onpage_report"]`
 - **Analysis focus:** Traffic decay (>20% MoM drop), keyword cannibalization, low-CTR title tag alternatives, orphaned page internal linking
 
-#### `offpage.py` (56 lines) — Agent 3: Off-Page PR & Security Bot
+#### `offpage.py` — Agent 3: Off-Page PR & Security Bot
 - **Reads:** `state["raw_data"]["backlink_data"]`
-- **System prompt:** `OFFPAGE_AGENT_PROMPT`
-- **Writes to:** `state["offpage_report"]`
-- **Analysis focus:** Toxic domains (spam score >60%), Google disavow file entries, competitor link gap opportunities, personalized outreach emails
+- **Analysis focus:** Toxic domains, Google disavow file entries, competitor link gap opportunities, personalized outreach emails
 
 ---
 
 ### Service Files (`src/seo_agents/services/`)
 
-#### `crawler.py` (294 lines) — Built-in Site Crawler
-**API Key:** None required  
-**Library:** `httpx` + `beautifulsoup4` + `lxml`
+#### `crawler.py` (Built-in HTTP Crawler)
+Performs a real breadth-first crawl of the target website using `httpx` and `BeautifulSoup`. No API key needed. Finds broken links, schema syntax errors, orphaned pages, and calculates crawl budget waste.
 
-The most complex service file. Performs a real breadth-first crawl of the target website:
+#### `pagespeed.py` (Google PageSpeed API)
+Uses `GOOGLE_API_KEY`. Fetches Core Web Vitals (LCP, FID, CLS, INP) metrics and top optimization opportunities for the pages found in the crawl.
 
-| Capability | How It Works |
-|-----------|-------------|
-| **Page discovery** | Starts from root URL, follows internal `<a href>` links up to `max_pages` |
-| **404 detection** | Records all pages returning HTTP 404 and counts how many internal pages link to them |
-| **Orphaned page detection** | After crawl, finds pages with zero inbound internal links |
-| **robots.txt analysis** | Fetches `/robots.txt` and includes the raw text in output |
-| **Crawl budget waste** | Flags URLs matching waste patterns (`/tag/`, `/archive/`, `/page/`, `?`, `/feed/`) |
-| **JSON-LD schema validation** | Parses every `<script type="application/ld+json">` tag, validates required properties per schema type (LocalBusiness, Article, Organization, etc.), checks date formats, flags non-absolute image URLs |
-| **Page metadata** | Extracts `<title>`, `<meta description>`, `<h1>` count/text, word count |
-| **Rate limiting** | 0.3s delay between requests to be respectful |
+#### `search_console.py` (Google Search Console API)
+Uses OAuth2 service account (`GSC_CREDENTIALS_PATH`). Fetches real keyword performance data (clicks, impressions, position, CTR) and detects cannibalization and traffic decay by comparing 30-day periods.
 
-Helper functions: `_is_same_domain()`, `_normalize_url()`, `_validate_schema()`
+#### Backlink API Providers (Auto-Selected)
+The suite supports three major backlink APIs natively. `tools.py` checks your `.env` variables and routes the request to whichever service is configured.
 
-#### `pagespeed.py` (168 lines) — Google PageSpeed Insights API
-**API Key:** `GOOGLE_API_KEY` (same as Gemini)  
-**Endpoint:** `https://www.googleapis.com/pagespeedonline/v5/runPagespeed`  
-**Cost:** Free (25,000 requests/day)
-
-| What It Fetches | Details |
-|----------------|---------|
-| **Performance score** | 0-100 Lighthouse score |
-| **Core Web Vitals** | LCP, FID, INP, CLS, FCP, TBT, Speed Index — each with score, display value, numeric value |
-| **Optimization opportunities** | Top 5 suggestions sorted by potential time savings (ms) |
-| **Diagnostics** | Top 5 table-type audit failures |
-
-Functions: `get_core_web_vitals(url, strategy)` for single URL, `get_web_vitals_for_pages(urls)` for batch.
-
-#### `search_console.py` (261 lines) — Google Search Console API
-**Auth:** OAuth2 Service Account (JSON credentials file)  
-**Env var:** `GSC_CREDENTIALS_PATH`  
-**Scope:** `webmasters.readonly`  
-**Cost:** Free (unlimited)
-
-| What It Fetches | Details |
-|----------------|---------|
-| **Keyword data** | Top 200 page+query pairs with clicks, impressions, CTR, position |
-| **Period comparison** | Current 30 days vs. previous 30 days (accounts for GSC's ~3-day data delay) |
-| **Decay detection** | Pages where clicks dropped >20% MoM (minimum 10 clicks threshold) |
-| **Cannibalization** | Keywords where 2+ pages from the same domain both rank |
-| **Low-CTR opportunities** | Keywords ranking in top 10 with ≥100 impressions but <3% CTR |
-| **Top keywords** | Top 20 keywords by clicks |
-
-Uses `google-api-python-client` and `google-auth` for OAuth2 service account authentication.
-
-#### `dataforseo.py` (256 lines) — DataForSEO Backlinks API
-**Auth:** HTTP Basic Auth (login + password)  
-**Env vars:** `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`  
-**Endpoints used:** 3 different endpoints  
-**Cost:** ~$0.002 per API task
-
-| Function | API Endpoint | What It Returns |
-|----------|-------------|-----------------|
-| `get_backlink_profile(domain)` | `/v3/backlinks/summary/live` | Total backlinks, referring domains/IPs, broken backlinks, spam score, rank |
-| (same function) | `/v3/backlinks/referring_domains/live` | Top 100 referring domains sorted by spam score desc; toxic domains (score >60) flagged separately |
-| (same function) | `/v3/backlinks/history/live` | New vs. lost backlinks (velocity) |
-| `get_competitor_backlink_gap(target, competitors)` | `/v3/backlinks/competitors/live` | Domains linking to up to 3 competitors but NOT to the target — the "link gap" |
+1. **`dataforseo.py`** — Uses API endpoints `/v3/backlinks/summary`, `/referring_domains`, and `/competitors`. Pay-as-you-go.
+2. **`semrush.py`** — Uses the Analytics API `backlinks_overview` and `backlinks_refdomains` endpoints. Requires Semrush Business plan.
+3. **`ahrefs.py`** — Uses Ahrefs API v3 (Site Explorer) `/overview` and `/refdomains`. Requires Ahrefs Enterprise plan.
 
 ---
 
@@ -388,7 +336,7 @@ Uses `google-api-python-client` and `google-auth` for OAuth2 service account aut
 | Aspect | Detail |
 |--------|--------|
 | **File** | `agents/offpage.py` |
-| **Data source** | `backlink_data` (from DataForSEO) |
+| **Data source** | `backlink_data` (from DataForSEO / Semrush / Ahrefs) |
 | **Persona** | Lead Off-Page Agent |
 | **Tone** | Analytical, includes domain authority scores |
 | **Capabilities** | Toxic Link Defender, Competitor Gap Mining, Auto-Drafted Outreach |
@@ -407,48 +355,17 @@ Uses `google-api-python-client` and `google-auth` for OAuth2 service account aut
 
 ## 6. External Services & API Integrations
 
-### Service → Agent Mapping
-
-```
-┌─────────────────────────┐     ┌────────────────────────────┐
-│  SERVICES (Data Layer)  │     │  AGENTS (AI Layer)          │
-│                         │     │                            │
-│  ┌─────────────────┐   │     │  ┌──────────────────────┐  │
-│  │ Site Crawler     │───┼──┬──┼─▶│ Technical Agent      │  │
-│  │ (built-in)       │   │  │  │  │ (DevOps Bot)         │  │
-│  └─────────────────┘   │  │  │  └──────────────────────┘  │
-│                         │  │  │                            │
-│  ┌─────────────────┐   │  │  │                            │
-│  │ PageSpeed API    │───┼──┘  │                            │
-│  │ (Google)         │   │     │                            │
-│  └─────────────────┘   │     │                            │
-│                         │     │  ┌──────────────────────┐  │
-│  ┌─────────────────┐   │     │  │ On-Page Agent        │  │
-│  │ Search Console   │───┼─────┼─▶│ (Content Strategist) │  │
-│  │ (Google)         │   │     │  └──────────────────────┘  │
-│  └─────────────────┘   │     │                            │
-│                         │     │  ┌──────────────────────┐  │
-│  ┌─────────────────┐   │     │  │ Off-Page Agent       │  │
-│  │ DataForSEO API   │───┼─────┼─▶│ (PR & Security Bot)  │  │
-│  │ (Backlinks)      │   │     │  └──────────────────────┘  │
-│  └─────────────────┘   │     │                            │
-│                         │     │                            │
-│  ┌─────────────────┐   │     │  ┌──────────────────────┐  │
-│  │ Gemini API       │───┼─────┼─▶│ ALL Agents + Super.  │  │
-│  │ (Google AI)      │   │     │  └──────────────────────┘  │
-│  └─────────────────┘   │     │                            │
-└─────────────────────────┘     └────────────────────────────┘
-```
-
 ### Service Details
 
 | Service | Auth Method | What It Provides | Graceful Degradation |
 |---------|-------------|------------------|---------------------|
-| **Site Crawler** | None (built-in) | Broken pages, schema validation, internal link graph, crawl budget waste, page metadata | Always available |
-| **PageSpeed Insights** | API key in URL params | LCP, FID, INP, CLS, performance score, optimization suggestions | Returns `{"error": "..."}` if key missing |
-| **Search Console** | OAuth2 service account | Keyword rankings, clicks, impressions, CTR, position changes, cannibalization | Returns `{"data_available": false, "error": "..."}` |
-| **DataForSEO** | HTTP Basic Auth | Backlink profiles, spam scores, toxic domains, referring domains, competitor gap, velocity | Returns `{"data_available": false, "error": "..."}` |
-| **Google Gemini** | API key in LangChain init | LLM inference for all 4 agent prompts | **App exits** — this is the only required service |
+| **Site Crawler** | None (built-in) | Broken pages, schema validation, internal links, page metadata | Always available |
+| **PageSpeed Insights** | `GOOGLE_API_KEY` | LCP, FID, INP, CLS, score, optimization suggestions | Returns error dict if key missing |
+| **Search Console** | `GSC_CREDENTIALS_PATH` | Keyword rankings, clicks, impressions, CTR, position changes | Returns data_available=False if missing |
+| **DataForSEO** | `DATAFORSEO_LOGIN` | Backlink profiles, toxic domains, competitor gap | Skipped if credentials not found |
+| **Semrush** | `SEMRUSH_API_KEY` | Backlinks, referring domains, domain score, competitor analysis | Skipped if credentials not found |
+| **Ahrefs** | `AHREFS_API_KEY` | Domain Rating, backlinks, referring domains, competitor gaps | Skipped if credentials not found |
+| **Google Gemini** | `GOOGLE_API_KEY` | LLM inference for all 4 agent prompts | **App exits** — this is the required service |
 
 ---
 
@@ -468,15 +385,9 @@ main()
         # 2. graph.py — LangGraph execution
         ├── ingest_data_node(state)
         │     └── tools.get_all_seo_data(url, max_pages, competitors)
-        │           ├── tools.get_crawl_data(url, max_pages)
-        │           │     ├── crawler.crawl_site(url, max_pages)     # HTTP crawl
-        │           │     ├── pagespeed.get_core_web_vitals(url)     # PageSpeed API
-        │           │     └── pagespeed.get_core_web_vitals(subpage)  # PageSpeed for key pages
-        │           ├── tools.get_analytics_data(url)
-        │           │     └── search_console.get_search_analytics(url)  # GSC API
-        │           └── tools.get_backlink_data(url, competitors)
-        │                 ├── dataforseo.get_backlink_profile(domain)   # 3 DataForSEO endpoints
-        │                 └── dataforseo.get_competitor_backlink_gap(domain, comps)
+        │           ├── tools.get_crawl_data(url, max_pages)        # HTTP crawl + PageSpeed API
+        │           ├── tools.get_analytics_data(url)               # GSC API
+        │           └── tools.get_backlink_data(url, competitors)   # Backlink provider
         │
         # 3. Fan-out: 3 agents run (conceptually parallel)
         ├── technical_agent_node(state, llm)   # Reads crawl_data → Gemini → technical_report
@@ -487,30 +398,18 @@ main()
         └── supervisor_node(state, llm)        # Reads all 3 reports → Gemini → final_report
 ```
 
-### How State Flows Between Nodes
-
-Every node receives the full `AgentState` dict and returns a **partial update** — only the keys it modifies. LangGraph merges these updates into the accumulated state automatically.
-
-```
-ingest_data     → writes: raw_data, messages
-technical_agent → writes: technical_report, messages
-onpage_agent    → writes: onpage_report, messages
-offpage_agent   → writes: offpage_report, messages
-supervisor      → writes: final_report, messages
-```
-
-The `messages` field uses `Annotated[list, operator.add]` which tells LangGraph to **concatenate** message lists from parallel nodes rather than overwriting. This ensures no agent's messages get lost in the fan-in.
-
 ---
 
 ## 8. LangGraph Internals
 
 ### Graph Definition (from `graph.py`)
 
+LangGraph relies on explicitly defining nodes and edges. Our system uses a parallel fan-out approach to emulate how a team of SEO specialists operates concurrently.
+
 ```python
 graph = StateGraph(AgentState)
 
-# 5 nodes
+# 5 nodes bound to the LLM via functools.partial
 graph.add_node("ingest_data",      ingest_data_node)
 graph.add_node("technical_agent",   partial(technical_agent_node, llm=llm))
 graph.add_node("onpage_agent",      partial(onpage_agent_node, llm=llm))
@@ -520,12 +419,12 @@ graph.add_node("supervisor",        partial(supervisor_node, llm=llm))
 # Entry point
 graph.set_entry_point("ingest_data")
 
-# Fan-out: 1 → 3
+# Fan-out: 1 node sends state to 3 sub-agents
 graph.add_edge("ingest_data", "technical_agent")
 graph.add_edge("ingest_data", "onpage_agent")
 graph.add_edge("ingest_data", "offpage_agent")
 
-# Fan-in: 3 → 1
+# Fan-in: All 3 sub-agents converge to supervisor
 graph.add_edge("technical_agent", "supervisor")
 graph.add_edge("onpage_agent",    "supervisor")
 graph.add_edge("offpage_agent",   "supervisor")
@@ -534,25 +433,19 @@ graph.add_edge("offpage_agent",   "supervisor")
 graph.add_edge("supervisor", END)
 ```
 
-### Why `functools.partial`?
-
-LangGraph node functions must have the signature `(state: AgentState) -> dict`. But our agents also need the LLM instance. We use `functools.partial` to pre-bind the `llm` argument:
-
-```python
-tech_node = partial(technical_agent_node, llm=llm)
-# Now tech_node(state) works — llm is already bound
-```
-
 ---
 
 ## 9. Environment Variables
 
 | Variable | Required | Service | How to Get It |
 |----------|----------|---------|---------------|
-| `GOOGLE_API_KEY` | **YES** | Gemini LLM + PageSpeed Insights | [Google AI Studio](https://aistudio.google.com/apikey) — free |
-| `GSC_CREDENTIALS_PATH` | No | Google Search Console | Create a GCP service account, download JSON, add email to Search Console users |
-| `DATAFORSEO_LOGIN` | No | DataForSEO Backlinks API | [Sign up](https://app.dataforseo.com/register) — $1 free credit |
-| `DATAFORSEO_PASSWORD` | No | DataForSEO Backlinks API | Found in DataForSEO dashboard |
+| `GOOGLE_API_KEY` | **YES** | Gemini LLM + PageSpeed | [Google AI Studio](https://aistudio.google.com/apikey) — free |
+| `GSC_CREDENTIALS_PATH` | No | Google Search Console | Create a GCP service account, download JSON |
+| `DATAFORSEO_LOGIN` | No* | DataForSEO API (Backlinks) | [Sign up](https://app.dataforseo.com/register) — $1 free credit |
+| `SEMRUSH_API_KEY` | No* | Semrush API (Backlinks) | Semrush Account → API Units (Business plan) |
+| `AHREFS_API_KEY` | No* | Ahrefs API (Backlinks) | Ahrefs Account → API Keys (Enterprise plan) |
+
+*\* You only need to configure ONE of the three backlink API providers (DataForSEO, Semrush, or Ahrefs).*
 
 ---
 
@@ -563,16 +456,13 @@ All managed via `uv` in `pyproject.toml`:
 | Package | Version | Purpose |
 |---------|---------|---------|
 | `langgraph` | ≥1.1.6 | Multi-agent graph orchestration framework |
-| `langchain-core` | ≥1.2.26 | Base abstractions (messages, LLM interface) |
 | `langchain-google-genai` | ≥4.2.1 | Google Gemini LLM wrapper for LangChain |
-| `httpx` | ≥0.28.1 | Async-capable HTTP client (for crawler + PageSpeed + DataForSEO) |
+| `httpx` | ≥0.28.1 | Async-capable HTTP client for crawler & APIs |
 | `beautifulsoup4` | ≥4.14.3 | HTML parsing for site crawler |
 | `lxml` | ≥6.0.2 | Fast HTML parser backend for BeautifulSoup |
 | `google-api-python-client` | ≥2.193.0 | Google Search Console API client |
-| `google-auth` | ≥2.49.1 | Google OAuth2 authentication |
-| `google-auth-oauthlib` | ≥1.3.1 | OAuth2 flow support |
 | `python-dotenv` | ≥1.2.2 | Load `.env` files into environment |
-| `rich` | ≥14.3.3 | Terminal output formatting (panels, tables, Markdown rendering) |
+| `rich` | ≥14.3.3 | Terminal output formatting |
 
 ---
 

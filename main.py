@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
+
 from rich.rule import Rule
 from rich.table import Table
 
@@ -93,15 +93,46 @@ def print_api_status():
         "GSC_CREDENTIALS_PATH",
     )
 
-    # DataForSEO
-    dfs_login = os.getenv("DATAFORSEO_LOGIN", "")
-    dfs_pass = os.getenv("DATAFORSEO_PASSWORD", "")
-    dfs_ok = bool(dfs_login and dfs_pass)
+    # Backlink Providers — detect which one is active
+    dfs_ok = bool(os.getenv("DATAFORSEO_LOGIN") and os.getenv("DATAFORSEO_PASSWORD"))
+    sem_ok = bool(os.getenv("SEMRUSH_API_KEY"))
+    ahr_ok = bool(os.getenv("AHREFS_API_KEY"))
+    any_backlink = dfs_ok or sem_ok or ahr_ok
+
+    # Show the active provider with a checkmark, others as available options
+    active_label = ""
+    if dfs_ok:
+        active_label = " [bold](ACTIVE)[/bold]"
     table.add_row(
-        "DataForSEO (Backlinks)",
-        "[green]✅ Configured[/green]" if dfs_ok else "[yellow]⚠️ Optional (skipped)[/yellow]",
-        "DATAFORSEO_LOGIN + DATAFORSEO_PASSWORD",
+        f"DataForSEO{active_label}",
+        "[green]✅ Configured[/green]" if dfs_ok else "[dim]Not configured[/dim]",
+        "DATAFORSEO_LOGIN + PASSWORD",
     )
+
+    active_label = ""
+    if sem_ok and not dfs_ok:
+        active_label = " [bold](ACTIVE)[/bold]"
+    table.add_row(
+        f"Semrush{active_label}",
+        "[green]✅ Configured[/green]" if sem_ok else "[dim]Not configured[/dim]",
+        "SEMRUSH_API_KEY",
+    )
+
+    active_label = ""
+    if ahr_ok and not dfs_ok and not sem_ok:
+        active_label = " [bold](ACTIVE)[/bold]"
+    table.add_row(
+        f"Ahrefs{active_label}",
+        "[green]✅ Configured[/green]" if ahr_ok else "[dim]Not configured[/dim]",
+        "AHREFS_API_KEY",
+    )
+
+    if not any_backlink:
+        table.add_row(
+            "",
+            "[yellow]⚠️ No backlink provider — off-page data skipped[/yellow]",
+            "",
+        )
 
     console.print(table)
     console.print()
