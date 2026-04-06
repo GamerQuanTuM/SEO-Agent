@@ -42,8 +42,10 @@ Produce actionable findings with exact code snippets for robots.txt rules, .htac
 
     response = llm.invoke(messages)
 
+    from src.seo_agents.utils import extract_text
+
     return {
-        "technical_report": response.content,
+        "technical_report": extract_text(response.content),
         "messages": [
             HumanMessage(content="[Technical Agent] Audit requested."),
             response,

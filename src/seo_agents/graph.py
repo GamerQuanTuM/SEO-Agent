@@ -81,8 +81,10 @@ Now synthesize these into your Executive Summary, Priority Action Plan, and Heal
 
     response = llm.invoke(messages)
 
+    from src.seo_agents.utils import extract_text
+
     return {
-        "final_report": response.content,
+        "final_report": extract_text(response.content),
         "messages": [
             HumanMessage(content="[Supervisor] Final report synthesis requested."),
             response,

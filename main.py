@@ -162,7 +162,7 @@ def run_audit(website_url: str, client_name: str, competitors: list[str], max_pa
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model="gemini-3-flash-preview",
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         temperature=0.3,
     )
@@ -173,7 +173,7 @@ def run_audit(website_url: str, client_name: str, competitors: list[str], max_pa
             f"[bold]Website:[/bold] {website_url}\n"
             f"[bold]Competitors:[/bold] {', '.join(competitors) if competitors else 'None specified'}\n"
             f"[bold]Max Pages to Crawl:[/bold] {max_pages}\n"
-            f"[bold]LLM:[/bold] Gemini 2.0 Flash\n"
+            f"[bold]LLM:[/bold] Gemini 3 Flash Preview\n"
             f"[bold]Framework:[/bold] LangGraph (Fan-out → Fan-in)",
             title="📋 Audit Configuration",
             border_style="green",

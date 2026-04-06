@@ -46,8 +46,10 @@ For each finding:
 
     response = llm.invoke(messages)
 
+    from src.seo_agents.utils import extract_text
+
     return {
-        "offpage_report": response.content,
+        "offpage_report": extract_text(response.content),
         "messages": [
             HumanMessage(content="[Off-Page Agent] Audit requested."),
             response,
