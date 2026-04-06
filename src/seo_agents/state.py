@@ -16,12 +16,15 @@ class AgentState(TypedDict):
     Attributes:
         website_url: The target website being audited.
         client_name: Name of the client for report labeling.
+        competitors: Competitor domains for gap analysis.
+        max_pages: Maximum pages to crawl.
         raw_data: Dict of raw data payloads keyed by source
                   (e.g. "crawl_data", "analytics_data", "backlink_data").
         technical_report: Markdown output from the Technical Agent.
         onpage_report: Markdown output from the On-Page Agent.
         offpage_report: Markdown output from the Off-Page Agent.
-        final_report: Combined executive summary from all agents.
+        content_report: Markdown output from the Content Generator Agent.
+        final_report: Combined executive summary from the Supervisor.
         messages: Accumulated LLM message history (append-only via operator.add).
     """
 
@@ -33,5 +36,6 @@ class AgentState(TypedDict):
     technical_report: str
     onpage_report: str
     offpage_report: str
+    content_report: str
     final_report: str
     messages: Annotated[list, operator.add]

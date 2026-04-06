@@ -1,12 +1,12 @@
 """
 Ezydrag AI SEO Suite — Demo Entry Point
 
-Runs all 3 SEO agents (Technical, On-Page, Off-Page) against a REAL
-website using LangGraph + Google Gemini, with live data from:
+Runs all 4 SEO agents (Technical, On-Page, Off-Page, Content Generator)
+against a REAL website using LangGraph + Google Gemini, with live data from:
   - Site Crawler (built-in, no key needed)
   - Google PageSpeed Insights API
   - Google Search Console API
-  - DataForSEO API
+  - DataForSEO / Semrush / Ahrefs API
 
 Usage:
     uv run python main.py --url https://example.com --client "My Client"
@@ -195,6 +195,7 @@ def run_audit(website_url: str, client_name: str, competitors: list[str], max_pa
         "technical_report": "",
         "onpage_report": "",
         "offpage_report": "",
+        "content_report": "",
         "final_report": "",
         "messages": [],
     }
@@ -205,8 +206,9 @@ def run_audit(website_url: str, client_name: str, competitors: list[str], max_pa
     console.print()
     console.print(
         "[dim]Phase 1: Data collection (crawling site, calling APIs...)\n"
-        "Phase 2: Agent analysis (Technical → On-Page → Off-Page)\n"
-        "Phase 3: Supervisor synthesis (Executive Report)\n[/dim]"
+        "Phase 2: Analysis agents (Technical → On-Page → Off-Page)\n"
+        "Phase 3: Content generation (fixes for all issues found)\n"
+        "Phase 4: Supervisor synthesis (Executive Report)\n[/dim]"
     )
     console.print()
 
@@ -220,7 +222,7 @@ def run_audit(website_url: str, client_name: str, competitors: list[str], max_pa
     console.print()
     console.print(Rule("[bold green]✅ Audit Complete[/bold green]"))
     console.print(
-        f"[dim]Completed in {elapsed:.1f}s across 3 agents + supervisor[/dim]\n"
+        f"[dim]Completed in {elapsed:.1f}s across 4 agents + supervisor[/dim]\n"
     )
 
     # Technical Report
@@ -263,6 +265,16 @@ def run_audit(website_url: str, client_name: str, competitors: list[str], max_pa
         )
     )
 
+    # Content Generator Report
+    console.print(
+        Panel(
+            Markdown(result.get("content_report", "No content generated.")),
+            title="✍️  Agent 4: Content Generator — Ready-to-Deploy Content",
+            border_style="bold cyan",
+            padding=(1, 2),
+        )
+    )
+
     # ── Save report to file ─────────────────────────────────────────────
     report_path = f"seo_audit_report_{client_name.lower().replace(' ', '_')}.md"
     with open(report_path, "w", encoding="utf-8") as f:
@@ -278,6 +290,8 @@ def run_audit(website_url: str, client_name: str, competitors: list[str], max_pa
         f.write(result.get("onpage_report", "N/A") + "\n\n---\n\n")
         f.write("## 🔗 Off-Page & PR Report\n\n")
         f.write(result.get("offpage_report", "N/A") + "\n\n---\n\n")
+        f.write("## ✍️  Content Generator — Ready-to-Deploy Content\n\n")
+        f.write(result.get("content_report", "N/A") + "\n\n---\n\n")
         f.write("## 🏆 Executive Summary\n\n")
         f.write(result.get("final_report", "N/A") + "\n")
 

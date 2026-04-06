@@ -3,11 +3,11 @@ LangGraph workflow definition for the Ezydrag AI SEO Suite.
 
 Builds a StateGraph with three parallel specialist agent nodes
 (Technical, On-Page, Off-Page) that fan out from an ingestion node,
-then fan back into a supervisor node that synthesizes the final report.
+fan back into a Content Generator node, then flow to Supervisor.
 
 Graph topology:
     ingest_data ──┬──> technical_agent ──┐
-                  ├──> onpage_agent    ──┤──> supervisor ──> END
+                  ├──> onpage_agent    ──┤──> content_generator ──> supervisor ──> END
                   └──> offpage_agent   ──┘
 """
 
@@ -24,6 +24,7 @@ from src.seo_agents.tools import get_all_seo_data
 from src.seo_agents.agents.technical import technical_agent_node
 from src.seo_agents.agents.onpage import onpage_agent_node
 from src.seo_agents.agents.offpage import offpage_agent_node
+from src.seo_agents.agents.content import content_generator_node
 
 
 # ── Node Functions ──────────────────────────────────────────────────────────
@@ -47,8 +48,8 @@ def ingest_data_node(state: AgentState) -> dict:
 
 
 def supervisor_node(state: AgentState, llm) -> dict:
-    """Synthesizes all three agent reports into a unified executive summary."""
-    user_message = f"""Here are the complete reports from the three specialist SEO agents for **{state['client_name']}** ({state['website_url']}):
+    """Synthesizes all four agent reports into a unified executive summary."""
+    user_message = f"""Here are the complete reports from the four specialist SEO agents for **{state['client_name']}** ({state['website_url']}):
 
 ---
 
@@ -67,7 +68,12 @@ def supervisor_node(state: AgentState, llm) -> dict:
 
 ---
 
-Now synthesize these into your Executive Summary, Priority Action Plan, and Health Score."""
+# Content Generator Report
+{state.get('content_report', 'No content generated.')}
+
+---
+
+Now synthesize these into your Executive Summary, Priority Action Plan, Health Score, and Content Deployment Checklist."""
 
     messages = [
         SystemMessage(
@@ -98,6 +104,15 @@ Now synthesize these into your Executive Summary, Priority Action Plan, and Heal
 def build_seo_graph(llm) -> StateGraph:
     """Build and compile the SEO audit LangGraph.
 
+    Topology:
+        ingest_data ──┬──> technical_agent ──┐
+                      ├──> onpage_agent    ──┤──> content_generator ──> supervisor ──> END
+                      └──> offpage_agent   ──┘
+
+    The 3 analyst agents run in parallel, then their reports are consumed
+    by the Content Generator which produces deployable SEO content, and
+    finally the Supervisor synthesizes everything into an executive report.
+
     Args:
         llm: An initialized LLM instance (e.g. ChatGoogleGenerativeAI).
 
@@ -110,6 +125,7 @@ def build_seo_graph(llm) -> StateGraph:
     tech_node = partial(technical_agent_node, llm=llm)
     onpage_node = partial(onpage_agent_node, llm=llm)
     offpage_node = partial(offpage_agent_node, llm=llm)
+    content_node = partial(content_generator_node, llm=llm)
     supervisor = partial(supervisor_node, llm=llm)
 
     # Add nodes
@@ -117,20 +133,24 @@ def build_seo_graph(llm) -> StateGraph:
     graph.add_node("technical_agent", tech_node)
     graph.add_node("onpage_agent", onpage_node)
     graph.add_node("offpage_agent", offpage_node)
+    graph.add_node("content_generator", content_node)
     graph.add_node("supervisor", supervisor)
 
     # Set entry point
     graph.set_entry_point("ingest_data")
 
-    # Fan-out: ingest → all 3 agents in parallel
+    # Fan-out: ingest → all 3 analyst agents in parallel
     graph.add_edge("ingest_data", "technical_agent")
     graph.add_edge("ingest_data", "onpage_agent")
     graph.add_edge("ingest_data", "offpage_agent")
 
-    # Fan-in: all 3 agents → supervisor
-    graph.add_edge("technical_agent", "supervisor")
-    graph.add_edge("onpage_agent", "supervisor")
-    graph.add_edge("offpage_agent", "supervisor")
+    # Fan-in: all 3 analysts → content generator
+    graph.add_edge("technical_agent", "content_generator")
+    graph.add_edge("onpage_agent", "content_generator")
+    graph.add_edge("offpage_agent", "content_generator")
+
+    # Content generator → Supervisor
+    graph.add_edge("content_generator", "supervisor")
 
     # Supervisor → END
     graph.add_edge("supervisor", END)
