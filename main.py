@@ -37,14 +37,15 @@ console = Console()
 def print_banner():
     """Print a stylish startup banner."""
     banner = """
+
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║     ███████╗███████╗██╗   ██╗██████╗ ██████╗  █████╗  ██████╗║
-║     ██╔════╝╚══███╔╝╚██╗ ██╔╝██╔══██╗██╔══██╗██╔══██╗██╔════╝║
-║     █████╗    ███╔╝  ╚████╔╝ ██║  ██║██████╔╝███████║██║  ███╗║
-║     ██╔══╝   ███╔╝   ╚██╔╝  ██║  ██║██╔══██╗██╔══██║██║   ██║║
-║     ███████╗███████╗   ██║   ██████╔╝██║  ██║██║  ██║╚██████╔╝║
-║     ╚══════╝╚══════╝   ╚═╝   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝║
+║   ███████╗███████╗██╗   ██╗██████╗ ██████╗  █████╗  ██████╗  ║
+║   ██╔════╝╚══███╔╝╚██╗ ██╔╝██╔══██╗██╔══██╗██╔══██╗██╔════╝  ║
+║   █████╗    ███╔╝  ╚████╔╝ ██║  ██║██████╔╝███████║██║  ███╗ ║
+║   ██╔══╝   ███╔╝   ╚██╔╝  ██║  ██║██╔══██╗██╔══██║██║   ██║║ ║
+║   ███████╗███████╗   ██║   ██████╔╝██║  ██║██║  ██║╚██████╔╝ ║
+║   ╚══════╝╚══════╝   ╚═╝   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ║
 ║                                                              ║
 ║          AI SEO Suite — Multi-Agent Audit System             ║
 ║          Powered by LangGraph + Google Gemini                ║
@@ -160,12 +161,20 @@ def run_audit(website_url: str, client_name: str, competitors: list[str], max_pa
 
     # ── Initialize LLM ─────────────────────────────────────────────────
     from langchain_google_genai import ChatGoogleGenerativeAI
+    # from langchain_groq import ChatGroq
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-3-flash-preview",
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         temperature=0.3,
     )
+
+
+    # llm = ChatGroq(
+    #     model="openai/gpt-oss-120b",
+    #     temperature=0.3,
+    #     api_key=os.getenv("GROQ_API_KEY"),
+    # )
 
     console.print(
         Panel(

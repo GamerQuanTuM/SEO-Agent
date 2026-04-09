@@ -30,7 +30,7 @@ def technical_agent_node(state: AgentState, llm) -> dict:
 
 ### Raw Crawl & Infrastructure Data:
 ```json
-{json.dumps(crawl_data, indent=2)}
+{json.dumps(crawl_data, indent=2)[:1000]}... [Data Truncated for Rate Limits]
 ```
 
 Produce actionable findings with exact code snippets for robots.txt rules, .htaccess 301 redirects, and developer tickets. Be specific — reference exact URLs, file names, and metrics from the data."""

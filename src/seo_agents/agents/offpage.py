@@ -30,7 +30,7 @@ def offpage_agent_node(state: AgentState, llm) -> dict:
 
 ### Raw Backlink Profile Data:
 ```json
-{json.dumps(backlink_data, indent=2)}
+{json.dumps(backlink_data, indent=2)[:2000]}... [Data Truncated for Rate Limits]
 ```
 
 For each finding:

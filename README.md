@@ -197,6 +197,12 @@ seo-agent/
 - Renders all 5 reports (Technical, On-Page, Off-Page, Content, Executive) in color-coded Rich panels
 - Saves the complete audit to a timestamped Markdown file
 
+#### `src/seo_agents/api/main.py`
+**Role:** FastAPI backend that serves LangGraph findings.
+- Provides RESTful endpoints to connect with the React frontend.
+- Uses `motor` (PyMongo) to fetch and persist JSON structured agent data to MongoDB.
+- Includes `/api/audit` to trigger audits from the UI.
+
 ---
 
 ### `src/seo_agents/state.py`
@@ -477,6 +483,10 @@ All managed via `uv` in `pyproject.toml`:
 | `google-api-python-client` | ≥2.193.0 | Google Search Console API |
 | `python-dotenv` | ≥1.2.2 | Load `.env` files |
 | `rich` | ≥14.3.3 | Terminal output formatting |
+| `fastapi` | latest | Backend API framework |
+| `uvicorn` | latest | ASGI server |
+| `pymongo` | latest | MongoDB synchronous client |
+| `motor` | latest | MongoDB asynchronous client |
 
 ---
 
@@ -491,6 +501,12 @@ uv sync
 ```bash
 uv run python main.py --url https://example.com --client "Example Corp"
 ```
+
+### Run the FastAPI Backend & MongoDB API
+```bash
+uv run uvicorn src.seo_agents.api.main:app --host 0.0.0.0 --port 8000
+```
+*(The backend fetches the agents' JSON structures and feeds the frontend React UI)*
 
 ### Run a full audit with competitor analysis
 ```bash

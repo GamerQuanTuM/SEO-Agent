@@ -9,3 +9,9 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+#VS Code
+.vscode
+
+#Node Modules
+ezydrag-frontend/node_modules

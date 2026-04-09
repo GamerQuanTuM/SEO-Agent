@@ -54,22 +54,22 @@ def supervisor_node(state: AgentState, llm) -> dict:
 ---
 
 # Technical Agent Report
-{state.get('technical_report', 'No report generated.')}
+{state.get('technical_report', 'No report generated.')[:1500]}
 
 ---
 
 # On-Page Agent Report
-{state.get('onpage_report', 'No report generated.')}
+{state.get('onpage_report', 'No report generated.')[:1500]}
 
 ---
 
 # Off-Page Agent Report
-{state.get('offpage_report', 'No report generated.')}
+{state.get('offpage_report', 'No report generated.')[:1500]}
 
 ---
 
 # Content Generator Report
-{state.get('content_report', 'No content generated.')}
+{state.get('content_report', 'No content generated.')[:1500]}
 
 ---
 

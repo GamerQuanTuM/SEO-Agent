@@ -30,7 +30,7 @@ def onpage_agent_node(state: AgentState, llm) -> dict:
 
 ### Raw Analytics & Search Console Data:
 ```json
-{json.dumps(analytics_data, indent=2)}
+{json.dumps(analytics_data, indent=2)[:2000]}... [Data Truncated for Rate Limits]
 ```
 
 For each finding:

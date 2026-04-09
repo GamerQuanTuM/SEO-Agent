@@ -32,9 +32,9 @@ def content_generator_node(state: AgentState, llm) -> dict:
     Returns:
         Partial state update with content_report and appended messages.
     """
-    technical_report = state.get("technical_report", "No technical report available.")
-    onpage_report = state.get("onpage_report", "No on-page report available.")
-    offpage_report = state.get("offpage_report", "No off-page report available.")
+    technical_report = state.get("technical_report", "No technical report available.")[:2500]
+    onpage_report = state.get("onpage_report", "No on-page report available.")[:2500]
+    offpage_report = state.get("offpage_report", "No off-page report available.")[:2500]
 
     user_message = f"""You have received the complete SEO audit findings for **{state['client_name']}** ({state['website_url']}).
 Your job is to generate actual, publishable content that fixes the issues identified.
